@@ -31,7 +31,9 @@ SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN", "")
 SLACK_DESTINATIONS = os.environ.get("SLACK_DESTINATIONS", "")
 
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "").rstrip("/")
-MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "300"))
+MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "300"))  # par fichier (Caddy coupe a 310 Mo par envoi)
+MAX_FILES = int(os.environ.get("MAX_FILES", "20"))  # fichiers par envoi
+DRAFT_MAX_AGE_H = int(os.environ.get("DRAFT_MAX_AGE_H", "48"))  # brouillons du bouton Partager non utilises
 WORKERS = int(os.environ.get("STUDIO_WORKERS", "2"))
 
 

@@ -6,6 +6,8 @@ After=network-online.target
 WorkingDirectory=%h/studio
 EnvironmentFile=%h/.config/studio/env
 Environment=PATH=%h/studio/venv/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+# Envois en cours de reception sur le disque, pas dans /tmp (en RAM sur ce serveur)
+Environment=TMPDIR=%h/studio/data/tmp
 ExecStart=%h/studio/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8787 --proxy-headers --forwarded-allow-ips=127.0.0.1
 Restart=always
 RestartSec=5

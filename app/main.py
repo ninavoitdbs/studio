@@ -29,6 +29,7 @@ async def lifespan(app):
         raise RuntimeError("TEAM_CODE et SECRET_KEY doivent être définis (fichier env).")
     db.conn()
     jobs.resume_interrupted()
+    purge_old_drafts()
     yield
 
 
@@ -136,20 +137,39 @@ def items(q: str = "", mine: bool = False, name: str = Depends(user)):
 
 
 def _save_uploads(files: list[UploadFile], dest: Path) -> list[str]:
-    saved = []
+    """Enregistre les fichiers joints. Taille controlee pendant la copie (arret des que la
+    limite est depassee) ; en cas de refus, rien de ce qui a ete ecrit ne reste sur le disque."""
+    files = [f for f in files or [] if f and f.filename]
+    if len(files) > config.MAX_FILES:
+        raise HTTPException(400, f"Trop de fichiers (max {config.MAX_FILES} à la fois).")
+    limit = config.MAX_UPLOAD_MB * 1024 * 1024
+    written: list[Path] = []
     dest.mkdir(parents=True, exist_ok=True)
-    for f in files or []:
-        if not f or not f.filename:
-            continue
-        safe = re.sub(r"[^\w.\-]+", "_", Path(f.filename).name)[-80:] or "fichier"
-        target = dest / f"{len(saved) + 1:02d}_{safe}"
-        with open(target, "wb") as out:
-            shutil.copyfileobj(f.file, out, length=1024 * 1024)
-        if target.stat().st_size > config.MAX_UPLOAD_MB * 1024 * 1024:
-            target.unlink()
-            raise HTTPException(413, f"Fichier trop lourd (max {config.MAX_UPLOAD_MB} Mo).")
-        saved.append(target.name)
-    return saved
+    try:
+        for f in files:
+            safe = re.sub(r"[^\w.\-]+", "_", Path(f.filename).name)[-80:] or "fichier"
+            target = dest / f"{len(written) + 1:02d}_{safe}"
+            written.append(target)
+            size = 0
+            with open(target, "wb") as out:
+                while chunk := f.file.read(1024 * 1024):
+                    size += len(chunk)
+                    if size > limit:
+                        raise HTTPException(413, f"Fichier trop lourd (max {config.MAX_UPLOAD_MB} Mo).")
+                    out.write(chunk)
+    except BaseException:
+        for p in written:
+            p.unlink(missing_ok=True)
+        raise
+    return [p.name for p in written]
+
+
+def purge_old_drafts() -> None:
+    """Efface les brouillons du bouton Partager jamais utilises (base + fichiers)."""
+    limit = time.time() - config.DRAFT_MAX_AGE_H * 3600
+    for d in db.query("SELECT id FROM drafts WHERE created_at < ?", (limit,)):
+        shutil.rmtree(config.DATA_DIR / "drafts" / d["id"], ignore_errors=True)
+        db.execute("DELETE FROM drafts WHERE id=?", (d["id"],))
 
 
 @app.post("/api/items")
@@ -165,7 +185,13 @@ def create_item(url: str = Form(""), text: str = Form(""), instructions: str = F
         raise HTTPException(400, "Mets un lien, un texte ou des fichiers.")
     iid = db.create_item(name, url or None, text.strip() or None, instructions.strip() or None, format)
     up = jobs.item_dir(iid) / "uploads"
-    _save_uploads(files, up)
+    try:
+        _save_uploads(files, up)
+    except HTTPException:
+        # Envoi refuse : pas de contenu orphelin dans la bibliotheque
+        shutil.rmtree(jobs.item_dir(iid), ignore_errors=True)
+        db.execute("DELETE FROM items WHERE id=?", (iid,))
+        raise
     if d:
         draft_dir = config.DATA_DIR / "drafts" / d["id"]
         for f in json.loads(d["files_json"] or "[]"):
@@ -265,23 +291,37 @@ def dictate(audio: UploadFile = File(...), name: str = Depends(user)):
 
 @app.post("/share")
 async def share_target(request: Request):
-    form = await request.form()
+    # Connexion verifiee AVANT de lire le formulaire : un visiteur inconnu ne depose rien
     name = read_session(request.cookies.get(COOKIE))
+    if not name:
+        return RedirectResponse("/?partage=connexion", status_code=303)
+    form = await request.form()
     blob = " ".join(str(form.get(k) or "") for k in ("url", "text", "title"))
     url = fetch.extract_url(blob) or ""
     text = "" if url else str(form.get("text") or "").strip()
     files = [f for f in form.getlist("files") if hasattr(f, "filename") and f.filename]
+    if len(files) > config.MAX_FILES:
+        raise HTTPException(400, f"Trop de fichiers (max {config.MAX_FILES} à la fois).")
+    purge_old_drafts()
     did = db.create_draft(name, url, text, [])
-    saved = _save_uploads(files, config.DATA_DIR / "drafts" / did) if files else []
+    try:
+        saved = _save_uploads(files, config.DATA_DIR / "drafts" / did) if files else []
+    except HTTPException:
+        shutil.rmtree(config.DATA_DIR / "drafts" / did, ignore_errors=True)
+        db.execute("DELETE FROM drafts WHERE id=?", (did,))
+        raise
     if saved:
         db.execute("UPDATE drafts SET files_json=? WHERE id=?", (json.dumps(saved), did))
     return RedirectResponse(f"/?draft={did}#/nouveau", status_code=303)
 
 
 @app.get("/share")
-def share_target_get(url: str = "", text: str = "", title: str = ""):
+def share_target_get(request: Request, url: str = "", text: str = "", title: str = ""):
+    name = read_session(request.cookies.get(COOKIE))
+    if not name:
+        return RedirectResponse("/?partage=connexion", status_code=303)
     link = fetch.extract_url(f"{url} {text} {title}") or ""
-    did = db.create_draft(None, link, "" if link else text, [])
+    did = db.create_draft(name, link, "" if link else text, [])
     return RedirectResponse(f"/?draft={did}#/nouveau", status_code=303)
 
 

@@ -1,6 +1,6 @@
 // Service worker minimal : rend l'appli installable et garde l'interface en cache.
-const CACHE = "studio-v2";
-const SHELL = ["/", "/static/style.css?v=2", "/static/app.js?v=2", "/static/icons/icon-192.png"];
+const CACHE = "studio-v3";
+const SHELL = ["/", "/static/style.css?v=3", "/static/app.js?v=3", "/static/icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

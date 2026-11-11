@@ -157,6 +157,8 @@ function showLogin() {
     <form class="login" id="login">
       <h1>Bienvenue dans le Studio</h1>
       <p class="lead">Un réel, un post, un mail qui t'inspire devient un script à la façon de Nina.</p>
+      ${new URLSearchParams(location.search).get("partage") === "connexion"
+        ? "<p class=\"lead\"><strong>Connecte-toi, puis repartage ton contenu avec le bouton « Partager ».</strong></p>" : ""}
       <div class="field"><label for="name">Ton prénom</label><input class="input" id="name" autocomplete="given-name" required></div>
       <div class="field"><label for="code">Code d'équipe</label><input class="input" id="code" type="password" autocomplete="current-password" required></div>
       <button class="btn big">Entrer</button>
