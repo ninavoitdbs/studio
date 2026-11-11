@@ -42,7 +42,7 @@ apply() {  # $1 = version d'avant, $2 = version a appliquer (deja extraite)
 
 healthy() {
   for _ in $(seq 1 30); do
-    curl -fsS -o /dev/null http://127.0.0.1:8787/healthz && return 0
+    curl -fs -o /dev/null http://127.0.0.1:8787/healthz && return 0
     sleep 2
   done
   return 1

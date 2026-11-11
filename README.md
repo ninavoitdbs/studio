@@ -7,7 +7,7 @@ Appli web installable sur téléphone (Android : bouton « Partager » d'Instagr
 - Serveur `nina-vps`, dossier `~/studio`, service systemd utilisateur `studio` (port local 127.0.0.1:8787).
 - Réglages et secrets : `~/.config/studio/env` (chmod 600). Modèle : `deploy/env.example`.
 - Données : `~/studio/data/` (base SQLite `studio.db`, fichiers de chaque contenu dans `items/<id>/`).
-- Cerveau d'écriture : `~/studio/brain/` (voix, formats, doctrine, anecdotes de Nina). La source est `Second cerveau/Système/outils/studio/brain/` : la mettre à jour là puis redéployer.
+- Cerveau d'écriture : `~/studio/brain/` (voix, formats, doctrine, anecdotes de Nina). Il fait partie du dépôt Git : le modifier dans le clone, pousser, puis déployer (voir plus bas).
 
 ## Comment ça marche
 
@@ -24,11 +24,38 @@ journalctl --user -u studio -f
 systemctl --user restart studio
 ```
 
-Déployer depuis le PC (dans ce dossier) :
+Tests (avec le Python du venv) :
 
 ```bash
-tar czf - app static brain deploy requirements.txt | ssh nina-vps 'cd ~/studio && tar xzf - && systemctl --user restart studio'
+venv/bin/python tests/test_envois.py
 ```
+
+## Code et déploiement (depuis le 11/11/2026)
+
+- Le code est sous Git : dépôt privé GitHub `ninavoitdbs/studio`. La branche `main` est ce qui tourne en prod.
+- **Ne plus déployer avec `tar`** : ça contournerait l'historique et le retour arrière.
+- Sur le PC : cloner le dépôt (`git clone git@github.com:ninavoitdbs/studio.git`), modifier, `git commit`, `git push`. Puis déployer :
+
+```bash
+ssh nina-vps ~/studio/deploy/deploy.sh
+```
+
+Le script refuse de tourner si des fichiers ont été modifiés directement sur le serveur, récupère `main`, réinstalle les dépendances si `requirements.lock` a changé, met à jour les unités systemd, redémarre et vérifie `/healthz`. Si le Studio ne répond pas, il revient tout seul à la version précédente.
+
+- Dépendances : versions exactes dans `requirements.lock` (c'est lui qui est installé). `requirements.txt` sert seulement de liste de départ pour une mise à jour volontaire (par exemple yt-dlp quand Instagram ou Facebook changent).
+
+## Sauvegardes
+
+- Tous les jours vers 03:30 : `deploy/backup.sh` (timer `studio-backup`). Archives dans `~/backups/studio/` (7 quotidiennes + 4 hebdomadaires) : base, fichiers, réglages, fichier env.
+- Pas de copie hors serveur (choix du 11/11/2026) : si le VPS est perdu, ce sont les sauvegardes Hostinger qui servent.
+- Sauvegarde à la main : `systemctl --user start studio-backup`.
+- Restaurer : arrêter le Studio, extraire l'archive (`tar xzf <archive> -C /tmp/restau`), remettre `data/` (et le fichier env si besoin) à sa place, redémarrer.
+
+## Limites d'envoi
+
+- Caddy refuse tout envoi de plus de 310 Mo. L'appli accepte 300 Mo par fichier et 20 fichiers par envoi.
+- Bouton « Partager » sans session : rien n'est gardé sur le serveur, le lien est repris dans l'adresse et pré-rempli après connexion (les fichiers ne suivent pas).
+- Brouillons de partage non utilisés effacés après 48 h.
 
 ## Version locale sur le PC de Nina (depuis le 09/11/2026)
 
