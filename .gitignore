@@ -1,0 +1,10 @@
+# Environnement Python et caches
+venv/
+.venv/
+__pycache__/
+*.pyc
+# Donnees de prod (sauvegardees par deploy/backup.sh, jamais dans Git)
+data/
+# Secrets
+*.env
+env

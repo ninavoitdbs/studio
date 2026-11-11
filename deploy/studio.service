@@ -1,0 +1,14 @@
+[Unit]
+Description=Studio du Bon Sens (scripts a partir de contenus inspirants)
+After=network-online.target
+
+[Service]
+WorkingDirectory=%h/studio
+EnvironmentFile=%h/.config/studio/env
+Environment=PATH=%h/studio/venv/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/studio/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8787 --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,18 @@
+display_information:
+  name: Studio du Bon Sens
+  description: Envoie sur Slack les scripts préparés dans le Studio
+  background_color: "#c9437d"
+features:
+  bot_user:
+    display_name: Studio
+    always_online: false
+oauth_config:
+  scopes:
+    bot:
+      - chat:write
+      - chat:write.public
+      - im:write
+settings:
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false
