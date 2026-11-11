@@ -68,7 +68,7 @@ if [ -n "$REMOTE" ]; then
   rclone delete "$REMOTE" --min-age 120d --include "weekly/studio_*.tar.gz"
   echo "copie hors serveur ok ($REMOTE)"
 else
-  echo "ATTENTION : pas de copie hors serveur (STUDIO_BACKUP_REMOTE vide)"
+  echo "copie hors serveur : non (choix du 11/11/2026 : local + sauvegardes Hostinger du VPS)"
 fi
 
 date -Iseconds > "$DEST/last_ok"
