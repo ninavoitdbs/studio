@@ -51,7 +51,9 @@ def test_share_post_sans_connexion_ne_cree_rien():
     r = c.post("/share", data={"url": "https://www.instagram.com/reel/abc/"},
                files={"files": ("video.mp4", b"x" * 1000, "video/mp4")})
     assert r.status_code == 303, r.status_code
-    assert r.headers["location"].startswith("/?partage=connexion"), r.headers["location"]
+    loc = r.headers["location"]
+    # Rien garde sur le serveur, mais le lien suit dans l'adresse (si Android n'envoie pas le cookie)
+    assert loc == "/?partage=connexion&lien=https%3A%2F%2Fwww.instagram.com%2Freel%2Fabc%2F&fichiers=perdus#/nouveau", loc
     assert _count("drafts") == before
     assert _draft_files() == []
 
@@ -61,8 +63,14 @@ def test_share_get_sans_connexion_ne_cree_rien():
     before = _count("drafts")
     r = c.get("/share", params={"url": "https://www.instagram.com/reel/abc/"})
     assert r.status_code == 303
-    assert r.headers["location"].startswith("/?partage=connexion")
+    assert r.headers["location"] == "/?partage=connexion&lien=https%3A%2F%2Fwww.instagram.com%2Freel%2Fabc%2F#/nouveau"
     assert _count("drafts") == before
+
+
+def test_share_sans_connexion_ni_lien():
+    c = _client(False)
+    r = c.post("/share", data={"text": "juste du texte"})
+    assert r.headers["location"] == "/?partage=connexion#/nouveau", r.headers["location"]
 
 
 def test_share_post_connecte_cree_le_brouillon():

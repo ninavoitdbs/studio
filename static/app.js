@@ -3,7 +3,15 @@ const $ = (s, el = document) => el.querySelector(s);
 const view = $("#view");
 let me = null;
 let pollTimer = null;
-const state = { draftId: new URLSearchParams(location.search).get("draft"), showAnalysis: false };
+const _params = new URLSearchParams(location.search);
+const state = {
+  draftId: _params.get("draft"),
+  showAnalysis: false,
+  // Partage reçu sans session (pas connecté, ou cookie non transmis) : le lien arrive dans l'adresse
+  sharedLink: _params.get("lien"),
+  sharedFilesLost: _params.get("fichiers") === "perdus",
+  sharedLogin: _params.get("partage") === "connexion",
+};
 
 const ICON = {
   mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
@@ -157,8 +165,8 @@ function showLogin() {
     <form class="login" id="login">
       <h1>Bienvenue dans le Studio</h1>
       <p class="lead">Un réel, un post, un mail qui t'inspire devient un script à la façon de Nina.</p>
-      ${new URLSearchParams(location.search).get("partage") === "connexion"
-        ? "<p class=\"lead\"><strong>Connecte-toi, puis repartage ton contenu avec le bouton « Partager ».</strong></p>" : ""}
+      ${state.sharedLogin
+        ? "<p class=\"lead\"><strong>Connecte-toi : ton contenu partagé t'attend juste après.</strong></p>" : ""}
       <div class="field"><label for="name">Ton prénom</label><input class="input" id="name" autocomplete="given-name" required></div>
       <div class="field"><label for="code">Code d'équipe</label><input class="input" id="code" type="password" autocomplete="current-password" required></div>
       <button class="btn big">Entrer</button>
@@ -275,6 +283,12 @@ async function renderNew() {
     urlIn.value = draft.url || "";
     if (draft.text) { $("#textField").hidden = false; textIn.value = draft.text; }
     showFiles();
+  } else if (state.sharedLink) {
+    urlIn.value = state.sharedLink;
+  }
+  if (state.sharedFilesLost) {
+    toast("Les fichiers partagés n'ont pas suivi : ajoute-les avec le bouton fichiers.", 6000);
+    state.sharedFilesLost = false;
   }
   $("#paste").onclick = async () => {
     try { const t = await navigator.clipboard.readText(); urlIn.value = extractUrl(t) || t; }
@@ -310,6 +324,7 @@ async function renderNew() {
     try {
       const r = await api("/api/items", { method: "POST", body: fd });
       state.draftId = null;
+      state.sharedLink = null;
       history.replaceState(null, "", "/" + `#/c/${r.id}`);
       route();
     } catch (e) {
@@ -318,7 +333,7 @@ async function renderNew() {
       $("#go").textContent = "Lancer";
     }
   };
-  if (!draft) urlIn.focus();
+  if (!draft && !state.sharedLink) urlIn.focus();
 }
 
 // --- un contenu et son fil ---

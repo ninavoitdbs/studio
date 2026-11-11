@@ -7,6 +7,7 @@ import logging
 import re
 import shutil
 import time
+from urllib.parse import quote
 
 import httpx
 from contextlib import asynccontextmanager
@@ -289,14 +290,27 @@ def dictate(audio: UploadFile = File(...), name: str = Depends(user)):
 
 # --- bouton « Partager » d'Android (Web Share Target) ---
 
+def _share_without_session(link: str, had_files: bool) -> RedirectResponse:
+    """Partage sans cookie de session (pas connecte, ou cookie non transmis par Android) :
+    rien n'est garde sur le serveur ; le lien passe dans l'adresse et l'interface le reprend."""
+    q = "/?partage=connexion"
+    if link:
+        q += "&lien=" + quote(link[:2000], safe="")
+    if had_files:
+        q += "&fichiers=perdus"
+    return RedirectResponse(q + "#/nouveau", status_code=303)
+
+
 @app.post("/share")
 async def share_target(request: Request):
-    # Connexion verifiee AVANT de lire le formulaire : un visiteur inconnu ne depose rien
     name = read_session(request.cookies.get(COOKIE))
-    if not name:
-        return RedirectResponse("/?partage=connexion", status_code=303)
+    # Formulaire mis en tampon sur le disque (TMPDIR), efface a la fin de la requete ;
+    # taille totale bornee par Caddy (310 Mo).
     form = await request.form()
     blob = " ".join(str(form.get(k) or "") for k in ("url", "text", "title"))
+    if not name:
+        has_files = any(hasattr(f, "filename") and f.filename for f in form.getlist("files"))
+        return _share_without_session(fetch.extract_url(blob) or "", has_files)
     url = fetch.extract_url(blob) or ""
     text = "" if url else str(form.get("text") or "").strip()
     files = [f for f in form.getlist("files") if hasattr(f, "filename") and f.filename]
@@ -318,9 +332,9 @@ async def share_target(request: Request):
 @app.get("/share")
 def share_target_get(request: Request, url: str = "", text: str = "", title: str = ""):
     name = read_session(request.cookies.get(COOKIE))
-    if not name:
-        return RedirectResponse("/?partage=connexion", status_code=303)
     link = fetch.extract_url(f"{url} {text} {title}") or ""
+    if not name:
+        return _share_without_session(link, False)
     did = db.create_draft(name, link, "" if link else text, [])
     return RedirectResponse(f"/?draft={did}#/nouveau", status_code=303)
 
