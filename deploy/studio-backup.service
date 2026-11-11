@@ -1,0 +1,9 @@
+[Unit]
+Description=Sauvegarde du Studio du Bon Sens (base, fichiers, reglages)
+
+[Service]
+Type=oneshot
+EnvironmentFile=-%h/.config/studio/backup.env
+ExecStart=%h/studio/deploy/backup.sh
+Nice=10
+IOSchedulingClass=idle
